@@ -1,0 +1,44 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ingenik-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ingenik
+      POSTGRES_PASSWORD: ingenik
+      POSTGRES_DB: ingenik
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    container_name: ingenik-backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgresql://ingenik:ingenik@postgres:5432/ingenik?schema=public
+      JWT_SECRET: change-me
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: ingenik-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:

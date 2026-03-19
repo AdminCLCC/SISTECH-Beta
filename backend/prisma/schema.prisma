@@ -1,0 +1,405 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id              Int              @id @default(autoincrement())
+  code            String           @unique
+  name            String
+  description     String?
+  isActive        Boolean          @default(true)
+  users           User[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Technician {
+  id                Int                   @id @default(autoincrement())
+  code              String                @unique
+  firstName         String
+  lastName          String
+  email             String?               @unique
+  phone             String?
+  isAvailable       Boolean               @default(true)
+  isActive          Boolean               @default(true)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  user              User?
+  assignedOrders    WorkOrder[]           @relation("AssignedTechnician")
+  diagnoses         Diagnosis[]
+  assignments       WorkOrderAssignment[]
+  stageTimes        WorkOrderStageTime[]
+  sparePartLines    WorkOrderSparePart[]
+}
+
+
+model User {
+  id                 Int                   @id @default(autoincrement())
+  firstName          String
+  lastName           String
+  email              String                @unique
+  passwordHash       String
+  isActive           Boolean               @default(true)
+  lastLoginAt        DateTime?
+  roleId             Int
+  technicianId       Int?                  @unique
+  role               Role                  @relation(fields: [roleId], references: [id])
+  technician         Technician?           @relation(fields: [technicianId], references: [id])
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  createdWorkOrders  WorkOrder[]           @relation("CreatedByUser")
+  assignments        WorkOrderAssignment[] @relation("AssignedByUser")
+  statusChanges      WorkOrderStatusHistory[] @relation("ChangedByUser")
+  closures           WorkOrderClosure[] @relation("ClosedByUser")
+  inventoryMovements InventoryMovement[]
+}
+
+
+model Customer {
+  id                    Int         @id @default(autoincrement())
+  identificationType    String?
+  identificationNumber  String?
+  fullName              String
+  phone                 String?
+  email                 String?
+  address               String?
+  customerType          String?
+  isActive              Boolean     @default(true)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  assets                Asset[]
+  workOrders            WorkOrder[]
+
+  @@index([identificationNumber])
+  @@index([fullName])
+}
+
+model Brand {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  assets     Asset[]
+}
+
+model ServiceType {
+  id         Int         @id @default(autoincrement())
+  code       String      @unique
+  name       String
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  workOrders WorkOrder[]
+}
+
+model Priority {
+  id         Int         @id @default(autoincrement())
+  code       String      @unique
+  name       String
+  weight     Int         @default(1)
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  workOrders WorkOrder[]
+}
+
+model WorkOrderStatus {
+  id                Int                      @id @default(autoincrement())
+  code              String                   @unique
+  name              String
+  isFinal           Boolean                  @default(false)
+  isActive          Boolean                  @default(true)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  workOrders        WorkOrder[]
+  previousInHistory WorkOrderStatusHistory[] @relation("PreviousStatus")
+  newInHistory      WorkOrderStatusHistory[] @relation("NewStatus")
+}
+
+
+model Asset {
+  id                 Int         @id @default(autoincrement())
+  customerId         Int
+  category           String
+  subcategory        String?
+  brandId            Int?
+  model              String?
+  serialNumber       String?
+  accessories        String?
+  physicalCondition  String?
+  notes              String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  customer           Customer    @relation(fields: [customerId], references: [id])
+  brand              Brand?      @relation(fields: [brandId], references: [id])
+  workOrders         WorkOrder[]
+
+  @@index([customerId])
+  @@index([serialNumber])
+}
+
+model WorkOrder {
+  id                        Int                   @id @default(autoincrement())
+  orderNumber               String                @unique
+  customerId                Int
+  assetId                   Int
+  serviceTypeId             Int
+  priorityId                Int
+  currentStatusId           Int
+  assignedTechnicianId      Int?
+  createdByUserId           Int
+  receivedAt                DateTime              @default(now())
+  initialProblemDescription String?
+  isRepairable              Boolean?
+  readyForClosure           Boolean               @default(false)
+  closedAt                  DateTime?
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  customer                  Customer              @relation(fields: [customerId], references: [id])
+  asset                     Asset                 @relation(fields: [assetId], references: [id])
+  serviceType               ServiceType           @relation(fields: [serviceTypeId], references: [id])
+  priority                  Priority              @relation(fields: [priorityId], references: [id])
+  currentStatus             WorkOrderStatus       @relation(fields: [currentStatusId], references: [id])
+  assignedTechnician        Technician?           @relation("AssignedTechnician", fields: [assignedTechnicianId], references: [id])
+  createdByUser             User                  @relation("CreatedByUser", fields: [createdByUserId], references: [id])
+  diagnosis                 Diagnosis?
+  assignments               WorkOrderAssignment[]
+  stageTimes                WorkOrderStageTime[]
+  statusHistory             WorkOrderStatusHistory[]
+  closure                   WorkOrderClosure?
+  sparePartLines            WorkOrderSparePart[]
+  inventoryMovements        InventoryMovement[]
+  costs                     WorkOrderCost?
+
+  @@index([customerId])
+  @@index([currentStatusId])
+  @@index([assignedTechnicianId])
+  @@index([receivedAt])
+}
+
+model DamageType {
+  id         Int         @id @default(autoincrement())
+  code       String      @unique
+  name       String
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  primaryDiagnoses   Diagnosis[] @relation("PrimaryDamageType")
+  secondaryDiagnoses Diagnosis[] @relation("SecondaryDamageType")
+}
+
+model NonRepairableReason {
+  id         Int         @id @default(autoincrement())
+  code       String      @unique
+  name       String
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  diagnoses  Diagnosis[]
+}
+
+model Diagnosis {
+  id                      Int                  @id @default(autoincrement())
+  workOrderId             Int                  @unique
+  technicianId            Int
+  primaryDamageTypeId     Int?
+  secondaryDamageTypeId   Int?
+  nonRepairableReasonId   Int?
+  technicalDescription    String?
+  proposedSolution        String?
+  estimatedHours          Decimal?             @db.Decimal(10, 2)
+  notes                   String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  workOrder               WorkOrder            @relation(fields: [workOrderId], references: [id])
+  technician              Technician           @relation(fields: [technicianId], references: [id])
+  primaryDamageType       DamageType?          @relation("PrimaryDamageType", fields: [primaryDamageTypeId], references: [id])
+  secondaryDamageType     DamageType?          @relation("SecondaryDamageType", fields: [secondaryDamageTypeId], references: [id])
+  nonRepairableReason     NonRepairableReason? @relation(fields: [nonRepairableReasonId], references: [id])
+}
+
+
+model ProcessStage {
+  id         Int                  @id @default(autoincrement())
+  code       String               @unique
+  name       String
+  sortOrder  Int                  @default(1)
+  isActive   Boolean              @default(true)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  stageTimes WorkOrderStageTime[]
+}
+
+model WorkOrderStageTime {
+  id             Int         @id @default(autoincrement())
+  workOrderId    Int
+  technicianId   Int
+  processStageId Int
+  startedAt      DateTime
+  endedAt        DateTime?
+  durationMinutes Int?
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  workOrder      WorkOrder   @relation(fields: [workOrderId], references: [id])
+  technician     Technician  @relation(fields: [technicianId], references: [id])
+  processStage   ProcessStage @relation(fields: [processStageId], references: [id])
+
+  @@index([workOrderId])
+  @@index([technicianId])
+  @@index([processStageId])
+  @@index([workOrderId, processStageId])
+}
+
+model WorkOrderStatusHistory {
+  id               Int             @id @default(autoincrement())
+  workOrderId      Int
+  previousStatusId Int?
+  newStatusId      Int
+  changedByUserId  Int
+  changeReason     String?
+  changedAt        DateTime        @default(now())
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  workOrder        WorkOrder       @relation(fields: [workOrderId], references: [id])
+  previousStatus   WorkOrderStatus? @relation("PreviousStatus", fields: [previousStatusId], references: [id])
+  newStatus        WorkOrderStatus @relation("NewStatus", fields: [newStatusId], references: [id])
+  changedByUser    User            @relation("ChangedByUser", fields: [changedByUserId], references: [id])
+
+  @@index([workOrderId, changedAt])
+}
+
+model WorkOrderClosure {
+  id                 Int       @id @default(autoincrement())
+  workOrderId        Int       @unique
+  diagnosisCompleted Boolean   @default(false)
+  timesCompleted     Boolean   @default(false)
+  closureAllowed     Boolean   @default(false)
+  closureNotes       String?
+  closedByUserId     Int?
+  closedAt           DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workOrder          WorkOrder @relation(fields: [workOrderId], references: [id])
+  closedByUser       User?     @relation("ClosedByUser", fields: [closedByUserId], references: [id])
+}
+
+model WorkOrderAssignment {
+  id                 Int        @id @default(autoincrement())
+  workOrderId        Int
+  technicianId       Int
+  assignedByUserId   Int?
+  assignmentType     String
+  reason             String?
+  assignedAt         DateTime   @default(now())
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  workOrder          WorkOrder  @relation(fields: [workOrderId], references: [id])
+  technician         Technician @relation(fields: [technicianId], references: [id])
+  assignedByUser     User?      @relation("AssignedByUser", fields: [assignedByUserId], references: [id])
+
+  @@index([workOrderId, assignedAt])
+}
+
+
+model SparePartType {
+  id         Int         @id @default(autoincrement())
+  code       String      @unique
+  name       String
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  spareParts SparePart[]
+}
+
+model SparePart {
+  id                 Int                 @id @default(autoincrement())
+  sparePartTypeId    Int?
+  code               String              @unique
+  name               String
+  unitMeasure        String?
+  standardCost       Decimal?            @db.Decimal(12, 2)
+  minimumStock       Decimal             @default(0) @db.Decimal(12, 2)
+  currentStock       Decimal             @default(0) @db.Decimal(12, 2)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  sparePartType      SparePartType?      @relation(fields: [sparePartTypeId], references: [id])
+  workOrderLines     WorkOrderSparePart[]
+  inventoryMovements InventoryMovement[]
+}
+
+model WorkOrderSparePart {
+  id            Int        @id @default(autoincrement())
+  workOrderId   Int
+  sparePartId   Int
+  technicianId  Int?
+  lineType      String
+  quantity      Decimal    @db.Decimal(12, 2)
+  unitCost      Decimal?   @db.Decimal(12, 2)
+  totalCost     Decimal?   @db.Decimal(12, 2)
+  notes         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  workOrder     WorkOrder  @relation(fields: [workOrderId], references: [id])
+  sparePart     SparePart  @relation(fields: [sparePartId], references: [id])
+  technician    Technician? @relation(fields: [technicianId], references: [id])
+
+  @@index([workOrderId])
+  @@index([sparePartId])
+}
+
+model InventoryMovementType {
+  id               Int                 @id @default(autoincrement())
+  code             String              @unique
+  name             String
+  affectsStockSign Int
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  movements        InventoryMovement[]
+}
+
+model InventoryMovement {
+  id                       Int                   @id @default(autoincrement())
+  sparePartId              Int
+  inventoryMovementTypeId  Int
+  workOrderId              Int?
+  quantity                 Decimal               @db.Decimal(12, 2)
+  unitCost                 Decimal?              @db.Decimal(12, 2)
+  referenceDocument        String?
+  notes                    String?
+  movedByUserId            Int
+  movedAt                  DateTime              @default(now())
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  sparePart                SparePart             @relation(fields: [sparePartId], references: [id])
+  inventoryMovementType    InventoryMovementType @relation(fields: [inventoryMovementTypeId], references: [id])
+  workOrder                WorkOrder?            @relation(fields: [workOrderId], references: [id])
+  movedByUser              User                  @relation(fields: [movedByUserId], references: [id])
+
+  @@index([sparePartId])
+  @@index([movedAt])
+}
+
+model WorkOrderCost {
+  id                  Int       @id @default(autoincrement())
+  workOrderId         Int       @unique
+  estimatedLaborCost  Decimal?  @db.Decimal(12, 2)
+  estimatedPartsCost  Decimal?  @db.Decimal(12, 2)
+  estimatedTotalCost  Decimal?  @db.Decimal(12, 2)
+  actualLaborCost     Decimal?  @db.Decimal(12, 2)
+  actualPartsCost     Decimal?  @db.Decimal(12, 2)
+  actualTotalCost     Decimal?  @db.Decimal(12, 2)
+  varianceAmount      Decimal?  @db.Decimal(12, 2)
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  workOrder           WorkOrder @relation(fields: [workOrderId], references: [id])
+}
